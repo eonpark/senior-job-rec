@@ -1,0 +1,11 @@
+# Python
+venv/
+*.pyc
+__pycache__/
+
+# Node.js
+node_modules/
+build/
+
+# 환경변수 및 민감한 정보
+.env

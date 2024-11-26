@@ -1,18 +1,24 @@
-from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.responses import JSONResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from typing import Optional, List
+from fastapi import FastAPI, UploadFile, File, Form, Request
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader
 from langchain_community.llms import OpenAI
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+import tensorflow as tf
+import numpy as np
+# import cv2
+from gtts import gTTS
+from langchain.schema import Document
+from dotenv import load_dotenv
 import os
 import tempfile
 from pathlib import Path
-from fastapi import Request
-from langchain.schema import Document
-from dotenv import load_dotenv  # 추가된 부분
+
+
+
 
 # 환경 변수 로드
 load_dotenv()
@@ -141,3 +147,85 @@ async def submit_resume(
     summary = chain.invoke([document])
 
     return templates.TemplateResponse("result.html", {"request": request, "summary": summary})
+
+
+# @app.post("/ask_question")
+# async def ask_question(job_description: str = Form(...)):
+#     """OpenAI를 사용하여 맞춤형 면접 질문 생성"""
+#     openai_api_key = os.getenv("OPENAI_API_KEY")
+#     job_description = '60세 이상 우대, 서울시립도서관에서 도서 대출 보조, 서가 정리 및 이용자 안내를 담당할 시간제 근로자를 모집합니다.'
+
+#     if not openai_api_key:
+#         return JSONResponse(content={"error": "API 키가 설정되지 않았습니다."}, status_code=500)
+
+@app.get("/ask_question")
+async def ask_question():
+    """
+    LangChain을 사용하여 고정된 job_description을 기반으로 면접 질문 생성
+    """
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        return JSONResponse(content={"error": "API 키가 설정되지 않았습니다."}, status_code=500)
+
+    try:
+        # 고정된 Job Description
+        job_description = "60세 이상 우대, 서울시립도서관에서 도서 대출 보조, 서가 정리 및 이용자 안내를 담당할 시간제 근로자를 모집합니다."
+
+        # LLM 초기화
+        llm = OpenAI(temperature=0.7, openai_api_key=openai_api_key)
+
+        # 프롬프트 템플릿 정의
+        prompt_template = PromptTemplate(
+            input_variables=["job_description"],
+            template="""
+            다음 채용공고를 기반으로 구직자의 역량을 평가할 수 있는 면접 질문 3개를 한국어로 생성하세요:
+            
+            채용공고:
+            {job_description}
+
+            면접 질문:
+            """
+        )
+
+        # LangChain LLMChain 구성
+        chain = LLMChain(llm=llm, prompt=prompt_template)
+
+        # LangChain을 사용하여 질문 생성
+        generated_questions = chain.run({"job_description": job_description})
+        question_text = generated_questions.strip()
+
+        # TTS로 질문 음성 생성
+        tts = gTTS(text=question_text, lang="ko")
+        tts.save("question.mp3")
+
+        return FileResponse("question.mp3")
+
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+# @app.post("/analyze_feedback")
+# async def analyze_feedback(file: UploadFile = File(...)):
+#     """Teachable Machine 모델을 사용하여 자세 분석 및 피드백 생성"""
+#     try:
+#         contents = await file.read()
+#         nparr = np.frombuffer(contents, np.uint8)
+#         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+#         img = cv2.resize(img, (224, 224))
+#         img = np.expand_dims(img, axis=0) / 255.0
+
+#         predictions = model.predict(img)
+#         label = class_names[np.argmax(predictions)]
+
+#         feedback = {
+#             "Confident": "Great! You look confident and professional.",
+#             "Neutral": "Your posture is neutral. Try to show more enthusiasm.",
+#             "Poor Posture": "Your posture needs improvement. Sit up straight and maintain eye contact."
+#         }.get(label, "Unknown feedback.")
+
+#         tts = gTTS(text=feedback, lang="en")
+#         tts.save("feedback.mp3")
+
+#         return FileResponse("feedback.mp3")
+
+#     except Exception as e:
+#         return JSONResponse(content={"error": str(e)}, status_code=500)

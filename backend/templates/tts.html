@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>질문 음성</title>
+</head>
+<body>
+    <h1>면접 연습</h1>
+    <div id="question-area">
+        <p><strong>질문:</strong> {{ question_text }}</p>
+    </div>
+    <audio controls autoplay>
+        <source src="{{ audio_file }}" type="audio/mpeg">
+        음성 재생을 지원하지 않는 브라우저입니다.
+    </audio>
+    {% if next_index is not none %}
+    <a href="/tts/{{ next_index }}">
+        <button>다음 질문</button>
+    </a>
+    {% else %}
+    <p>모든 질문이 완료되었습니다!</p>
+    {% endif %}
+</body>
+</html>

@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 import os
 import tempfile
 from pathlib import Path
-
+from fastapi.staticfiles import StaticFiles
 
 
 
@@ -31,6 +31,7 @@ BASE_DIR = Path(__file__).resolve().parent
 # app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -158,51 +159,116 @@ async def submit_resume(
 #     if not openai_api_key:
 #         return JSONResponse(content={"error": "API 키가 설정되지 않았습니다."}, status_code=500)
 
-@app.get("/ask_question")
-async def ask_question():
-    """
-    LangChain을 사용하여 고정된 job_description을 기반으로 면접 질문 생성
-    """
+# @app.get("/ask_question")
+# async def ask_question():
+#     """
+#     LangChain을 사용하여 고정된 job_description을 기반으로 면접 질문 생성
+#     """
+#     openai_api_key = os.getenv("OPENAI_API_KEY")
+#     if not openai_api_key:
+#         return JSONResponse(content={"error": "API 키가 설정되지 않았습니다."}, status_code=500)
+
+#     try:
+#         # 고정된 Job Description
+#         job_description = "60세 이상 우대, 서울시립도서관에서 도서 대출 보조, 서가 정리 및 이용자 안내를 담당할 시간제 근로자를 모집합니다."
+
+#         # LLM 초기화
+#         llm = OpenAI(temperature=0.7, openai_api_key=openai_api_key)
+
+#         # 프롬프트 템플릿 정의
+#         prompt_template = PromptTemplate(
+#             input_variables=["job_description"],
+#             template="""
+#             다음 채용공고를 기반으로 구직자의 역량을 평가할 수 있는 면접 질문 3개를 한국어로 생성하세요:
+            
+#             채용공고:
+#             {job_description}
+
+#             면접 질문:
+#             """
+#         )
+
+#         # LangChain LLMChain 구성
+#         chain = LLMChain(llm=llm, prompt=prompt_template)
+
+#         # LangChain을 사용하여 질문 생성
+#         generated_questions = chain.run({"job_description": job_description})
+#         question_text = generated_questions.strip()
+
+#         # TTS로 질문 음성 생성
+#         tts = gTTS(text=question_text, lang="ko")
+#         tts.save("question.mp3")
+
+#         return FileResponse("question.mp3")
+
+#     except Exception as e:
+#         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/generate_questions")
+async def generate_questions():
+    """LangChain을 사용하여 고정된 job_description을 기반으로 면접 질문 생성"""
+    global generated_questions
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
         return JSONResponse(content={"error": "API 키가 설정되지 않았습니다."}, status_code=500)
 
+    job_description = "60세 이상 우대, 서울시립도서관에서 도서 대출 보조, 서가 정리 및 이용자 안내를 담당할 시간제 근로자를 모집합니다."
+
+    llm = OpenAI(temperature=0.7, openai_api_key=openai_api_key)
+
+    prompt_template = PromptTemplate(
+        input_variables=["job_description"],
+        template="""
+        다음 채용공고를 기반으로 구직자의 역량을 평가할 수 있는 면접 질문 3개를 한국어로 생성하세요:
+        
+        채용공고:
+        {job_description}
+
+        면접 질문:
+        """
+    )
+
+    chain = LLMChain(llm=llm, prompt=prompt_template)
+    generated_questions = chain.run({"job_description": job_description})
+    generated_questions = [q.strip("- ") for q in generated_questions.strip().split("\n") if q.strip()]
+
+    return {"questions": generated_questions}
+
+@app.get("/tts/{question_index}", response_class=HTMLResponse)
+async def tts_page(request: Request, question_index: int):
+    """
+    특정 질문의 텍스트와 음성 파일을 HTML 페이지로 렌더링
+    """
+    global generated_questions
+
     try:
-        # 고정된 Job Description
-        job_description = "60세 이상 우대, 서울시립도서관에서 도서 대출 보조, 서가 정리 및 이용자 안내를 담당할 시간제 근로자를 모집합니다."
+        # 질문 유효성 확인
+        if question_index < 0 or question_index >= len(generated_questions):
+            return JSONResponse(content={"error": "Invalid question index"}, status_code=400)
 
-        # LLM 초기화
-        llm = OpenAI(temperature=0.7, openai_api_key=openai_api_key)
+        question_text = generated_questions[question_index]
 
-        # 프롬프트 템플릿 정의
-        prompt_template = PromptTemplate(
-            input_variables=["job_description"],
-            template="""
-            다음 채용공고를 기반으로 구직자의 역량을 평가할 수 있는 면접 질문 3개를 한국어로 생성하세요:
-            
-            채용공고:
-            {job_description}
-
-            면접 질문:
-            """
-        )
-
-        # LangChain LLMChain 구성
-        chain = LLMChain(llm=llm, prompt=prompt_template)
-
-        # LangChain을 사용하여 질문 생성
-        generated_questions = chain.run({"job_description": job_description})
-        question_text = generated_questions.strip()
-
-        # TTS로 질문 음성 생성
+        # TTS 음성 생성
         tts = gTTS(text=question_text, lang="ko")
-        tts.save("question.mp3")
+        tts_file = f"static/question_{question_index}.mp3"
+        tts.save(tts_file)
 
-        return FileResponse("question.mp3")
+        # HTML 페이지 렌더링
+        return templates.TemplateResponse(
+            "tts.html",
+            {
+                "request": request,
+                "question_text": question_text,
+                "audio_file": f"/static/question_{question_index}.mp3",
+                "next_index": question_index + 1 if question_index + 1 < len(generated_questions) else None,
+            }
+        )
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
+    
 # @app.post("/analyze_feedback")
 # async def analyze_feedback(file: UploadFile = File(...)):
 #     """Teachable Machine 모델을 사용하여 자세 분석 및 피드백 생성"""

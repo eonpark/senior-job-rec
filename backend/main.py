@@ -1,5 +1,5 @@
 from typing import Optional, List
-from fastapi import FastAPI, UploadFile, File, Form, Request
+from fastapi import FastAPI, UploadFile, File, Form, Request , WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader
@@ -9,7 +9,7 @@ from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 import tensorflow as tf
 import numpy as np
-# import cv2
+import cv2
 from gtts import gTTS
 from langchain.schema import Document
 from dotenv import load_dotenv
@@ -17,7 +17,7 @@ import os
 import tempfile
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
-
+import base64
 
 
 # 환경 변수 로드
@@ -268,7 +268,112 @@ async def tts_page(request: Request, question_index: int):
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
-    
+
+
+# TensorFlow Lite 모델 경로
+TFLITE_MODEL_PATH = "/Users/eonseon/senior-job-recommendation/backend/model_unquant.tflite"
+
+# TFLite 모델 로드
+try:
+    interpreter = tf.lite.Interpreter(model_path=TFLITE_MODEL_PATH)
+    interpreter.allocate_tensors()
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+    class_names = ["confident", "unconfident"]  # Teachable Machine에서 설정한 클래스 이름
+    print("TensorFlow Lite 모델 로드 성공")
+except Exception as e:
+    print(f"TensorFlow Lite 모델 로드 실패: {e}")
+    interpreter = None
+
+@app.websocket("/ws/analyze")
+async def websocket_analyze(websocket: WebSocket):
+    """
+    WebSocket 엔드포인트: 클라이언트에서 프레임을 실시간으로 받아 분석
+    """
+    if interpreter is None:
+        await websocket.close(code=1000)
+        print("모델이 로드되지 않았습니다.")
+        return
+
+    await websocket.accept()
+    try:
+        while True:
+            # 클라이언트로부터 Base64로 인코딩된 이미지 데이터 수신
+            data = await websocket.receive_text()
+            image_data = base64.b64decode(data)
+            nparr = np.frombuffer(image_data, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if img is None:
+                await websocket.send_json({"error": "이미지 디코딩 실패"})
+                continue
+
+            # 이미지를 모델 입력 크기로 조정
+            img = cv2.resize(img, (224, 224))
+            input_data = np.expand_dims(img, axis=0).astype(np.float32) / 255.0
+
+            # 모델 예측
+            interpreter.set_tensor(input_details[0]['index'], input_data)
+            interpreter.invoke()
+            predictions = interpreter.get_tensor(output_details[0]['index'])[0]
+
+            # 예측 결과 추출
+            confidence = float(np.max(predictions))  # 가장 높은 확률 값
+            label = class_names[np.argmax(predictions)]  # 가장 높은 확률에 해당하는 클래스 이름
+
+            # 결과를 클라이언트로 전송
+            await websocket.send_json({"label": label, "confidence": confidence})
+    except Exception as e:
+        print(f"WebSocket 에러: {e}")
+    finally:
+        await websocket.close()
+
+@app.post("/classify")
+async def classify_webcam_image(file: UploadFile = File(...)):
+    """
+    TensorFlow Lite 모델로 웹캠 이미지를 분류
+    """
+    if interpreter is None:
+        print("모델 로드 실패")
+        return JSONResponse(content={"error": "TensorFlow Lite 모델이 로드되지 않았습니다."}, status_code=500)
+
+    try:
+        # 이미지를 읽고 처리
+        print("이미지 읽기 시작")
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        print("이미지 디코딩 완료")
+
+        if img is None:
+            print("이미지 디코딩 실패")
+            return JSONResponse(content={"error": "이미지를 디코딩할 수 없습니다."}, status_code=400)
+
+        # 이미지를 모델 입력 크기로 조정
+        img = cv2.resize(img, (224, 224))  # Teachable Machine 모델의 입력 크기
+        print("이미지 리사이즈 완료")
+
+        # 이미지를 정규화하고 배치 차원 추가
+        input_data = np.expand_dims(img, axis=0).astype(np.float32) / 255.0
+        print("이미지 정규화 완료")
+
+        # 모델 예측
+        interpreter.set_tensor(input_details[0]['index'], input_data)
+        interpreter.invoke()
+        predictions = interpreter.get_tensor(output_details[0]['index'])[0]
+
+        # 예측 결과 추출
+        confidence = float(np.max(predictions))  # 가장 높은 확률 값
+        label = class_names[np.argmax(predictions)]  # 가장 높은 확률에 해당하는 클래스 이름
+
+        print(f"모델 예측 결과: {predictions}, 라벨: {label}, 신뢰도: {confidence}")
+
+        return JSONResponse({"label": label, "confidence": confidence})
+    except Exception as e:
+        print(f"예외 발생: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
 # @app.post("/analyze_feedback")
 # async def analyze_feedback(file: UploadFile = File(...)):
 #     """Teachable Machine 모델을 사용하여 자세 분석 및 피드백 생성"""

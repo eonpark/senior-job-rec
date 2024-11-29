@@ -3,17 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>질문 음성</title>
+    <title>질문 및 분석</title>
 </head>
 <body>
     <h1>면접 연습</h1>
-    <div id="question-area">
+
+    <!-- 질문 영역 -->
+    <div>
         <p><strong>질문:</strong> {{ question_text }}</p>
     </div>
     <audio controls autoplay>
         <source src="{{ audio_file }}" type="audio/mpeg">
         음성 재생을 지원하지 않는 브라우저입니다.
     </audio>
+
+    <!-- 태도 분석 -->
+    <h2>태도 분석</h2>
+    <div id="webcam-container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+    </div>
+    <div id="result">
+        <p>분류 결과: <span id="label">-</span></p>
+        <p>신뢰도: <span id="confidence">-</span></p>
+    </div>
+
     {% if next_index is not none %}
     <a href="/tts/{{ next_index }}">
         <button>다음 질문</button>
@@ -21,5 +35,61 @@
     {% else %}
     <p>모든 질문이 완료되었습니다!</p>
     {% endif %}
+
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const resultLabel = document.getElementById('label');
+        const resultConfidence = document.getElementById('confidence');
+
+        // 웹캠 초기화
+        async function initWebcam() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+        }
+
+        // 실시간 분석 (WebSocket 사용)
+        function startWebSocketAnalysis() {
+            const websocket = new WebSocket("ws://127.0.0.1:8000/ws/analyze");
+            const context = canvas.getContext("2d");
+            canvas.width = 224; // Teachable Machine 모델의 입력 크기
+            canvas.height = 224;
+
+            websocket.onopen = () => {
+                console.log("WebSocket 연결 열림");
+
+                // 주기적으로 프레임 전송
+                setInterval(() => {
+                    // 캔버스에 현재 프레임 캡처
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const imageData = canvas.toDataURL("image/jpeg");
+                    const base64Data = imageData.split(",")[1]; // Base64 데이터 추출
+                    websocket.send(base64Data); // WebSocket으로 전송
+                }, 500); // 0.5초 간격으로 프레임 전송
+            };
+
+            websocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.error) {
+                    console.error(data.error);
+                } else {
+                    // 분석 결과 업데이트
+                    resultLabel.textContent = data.label;
+                    resultConfidence.textContent = `${(data.confidence * 100).toFixed(2)}%`;
+                }
+            };
+
+            websocket.onerror = (error) => {
+                console.error("WebSocket 에러:", error);
+            };
+
+            websocket.onclose = () => {
+                console.log("WebSocket 연결 닫힘");
+            };
+        }
+
+        // 웹캠 초기화 및 실시간 분석 시작
+        initWebcam().then(startWebSocketAnalysis);
+    </script>
 </body>
 </html>

@@ -1,22 +1,110 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>이력서 작성</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f7f7f7;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #4CAF50;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        form {
+            width: 90%;
+            max-width: 500px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        label {
+            font-size: 1.2em;
+            margin-bottom: 5px;
+            display: block;
+            color: #555;
+        }
+
+        input, textarea {
+            width: 100%;
+            font-size: 1.1em;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        textarea {
+            resize: vertical;
+            height: 80px;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            font-size: 1.2em;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button:focus {
+            outline: 3px solid #45a049;
+        }
+    </style>
 </head>
 <body>
     <h1>이력서 작성</h1>
     <form action="/submit" method="post">
-        <label>이름:</label> <input type="text" name="name"><br>
-        <label>나이:</label> <input type="number" name="age"><br>
-        <label>연락처:</label> <input type="text" name="contact"><br>
-        <label>주요 경력:</label> <textarea name="experience"></textarea><br>
-        <label>학력:</label> <textarea name="education"></textarea><br>
-        <label>자격증:</label> <textarea name="certifications"></textarea><br>
-        <label>기술:</label> <textarea name="skills"></textarea><br>
-        <label>희망 직무:</label> <input type="text" name="desired_job"><br>
-        <label>희망 근무지:</label> <input type="text" name="desired_location"><br><br>
+        <label for="name">이름:</label>
+        <input type="text" id="name" name="name" placeholder="이름을 입력하세요" required>
+
+        <label for="age">나이:</label>
+        <input type="number" id="age" name="age" placeholder="나이를 입력하세요" min="1" required>
+
+        <label for="contact">연락처:</label>
+        <input type="text" id="contact" name="contact" placeholder="연락처를 입력하세요" required>
+
+        <label for="experience">주요 경력:</label>
+        <textarea id="experience" name="experience" placeholder="주요 경력을 입력하세요"></textarea>
+
+        <label for="education">학력:</label>
+        <textarea id="education" name="education" placeholder="학력을 입력하세요"></textarea>
+
+        <label for="certifications">자격증:</label>
+        <textarea id="certifications" name="certifications" placeholder="자격증을 입력하세요"></textarea>
+
+        <label for="skills">기술:</label>
+        <textarea id="skills" name="skills" placeholder="보유 기술을 입력하세요"></textarea>
+
+        <label for="desired_job">희망 직무:</label>
+        <input type="text" id="desired_job" name="desired_job" placeholder="희망 직무를 입력하세요">
+
+        <label for="desired_location">희망 근무지:</label>
+        <input type="text" id="desired_location" name="desired_location" placeholder="희망 근무지를 입력하세요">
+
         <button type="submit">요약하기</button>
     </form>
 </body>

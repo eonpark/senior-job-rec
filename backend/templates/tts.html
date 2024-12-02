@@ -3,38 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>질문 및 분석</title>
+    <title>면접 연습</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f7f7f7;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            background-color: #4CAF50;
+            color: white;
+            padding: 20px;
+            width: 100%;
+            text-align: center;
+            margin: 0;
+            font-size: 2.5em;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 90%;
+            margin: 20px auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        p {
+            font-size: 1.2em;
+            margin: 10px 0;
+        }
+
+        audio {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        #webcam-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        video {
+            border: 3px solid #4CAF50;
+            border-radius: 10px;
+        }
+
+        #result {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        #result p {
+            font-size: 1.5em;
+            margin: 10px 0;
+        }
+
+        button {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            font-size: 1.5em;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 1em;
+            color: #555;
+            margin: 20px 0;
+        }
+    </style>
 </head>
 <body>
     <h1>면접 연습</h1>
+    <div class="container">
+        <!-- 질문 영역 -->
+        <div>
+            <p><strong>질문:</strong> {{ question_text }}</p>
+        </div>
+        <audio controls autoplay>
+            <source src="{{ audio_file }}" type="audio/mpeg">
+            음성 재생을 지원하지 않는 브라우저입니다.
+        </audio>
 
-    <!-- 질문 영역 -->
-    <div>
-        <p><strong>질문:</strong> {{ question_text }}</p>
-    </div>
-    <audio controls autoplay>
-        <source src="{{ audio_file }}" type="audio/mpeg">
-        음성 재생을 지원하지 않는 브라우저입니다.
-    </audio>
+        <!-- 태도 분석 -->
+        <h2 style="text-align: center; color: #4CAF50;">태도 분석</h2>
+        <div id="webcam-container">
+            <video id="webcam" autoplay playsinline width="320" height="240"></video>
+        </div>
+        <div id="result">
+            <p>분류 결과: <span id="label">-</span></p>
+            <p>신뢰도: <span id="confidence">-</span></p>
+        </div>
 
-    <!-- 태도 분석 -->
-    <h2>태도 분석</h2>
-    <div id="webcam-container">
-        <video id="webcam" autoplay playsinline></video>
-        <canvas id="canvas" style="display:none;"></canvas>
-    </div>
-    <div id="result">
-        <p>분류 결과: <span id="label">-</span></p>
-        <p>신뢰도: <span id="confidence">-</span></p>
+        {% if next_index is not none %}
+        <a href="/tts/{{ next_index }}">
+            <button>다음 질문</button>
+        </a>
+        {% else %}
+        <p style="text-align: center; font-size: 1.2em;">모든 질문이 완료되었습니다!</p>
+        {% endif %}
     </div>
 
-    {% if next_index is not none %}
-    <a href="/tts/{{ next_index }}">
-        <button>다음 질문</button>
-    </a>
-    {% else %}
-    <p>모든 질문이 완료되었습니다!</p>
-    {% endif %}
+    <div class="footer">
+        <p>이용에 어려움이 있으시면 도움을 요청하세요.</p>
+    </div>
 
     <script>
         const video = document.getElementById('webcam');
@@ -51,8 +146,9 @@
         // 실시간 분석 (WebSocket 사용)
         function startWebSocketAnalysis() {
             const websocket = new WebSocket("ws://127.0.0.1:8000/ws/analyze");
+            const canvas = document.createElement('canvas');
             const context = canvas.getContext("2d");
-            canvas.width = 224; // Teachable Machine 모델의 입력 크기
+            canvas.width = 224;
             canvas.height = 224;
 
             websocket.onopen = () => {
@@ -60,12 +156,11 @@
 
                 // 주기적으로 프레임 전송
                 setInterval(() => {
-                    // 캔버스에 현재 프레임 캡처
                     context.drawImage(video, 0, 0, canvas.width, canvas.height);
                     const imageData = canvas.toDataURL("image/jpeg");
-                    const base64Data = imageData.split(",")[1]; // Base64 데이터 추출
-                    websocket.send(base64Data); // WebSocket으로 전송
-                }, 500); // 0.5초 간격으로 프레임 전송
+                    const base64Data = imageData.split(",")[1];
+                    websocket.send(base64Data);
+                }, 1000); // 1초 간격으로 프레임 전송
             };
 
             websocket.onmessage = (event) => {
@@ -73,7 +168,6 @@
                 if (data.error) {
                     console.error(data.error);
                 } else {
-                    // 분석 결과 업데이트
                     resultLabel.textContent = data.label;
                     resultConfidence.textContent = `${(data.confidence * 100).toFixed(2)}%`;
                 }

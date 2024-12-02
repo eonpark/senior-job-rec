@@ -1,5 +1,13 @@
-<form action="/summarize" method="post" enctype="multipart/form-data">
-    <label for="file">이력서 파일을 업로드하세요 (PDF 또는 DOCX):</label><br><br>
-    <input type="file" name="file" id="file" accept=".pdf,.docx" required><br><br>
-    <button type="submit">요약하기</button>
-</form>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>요약 결과</title>
+</head>
+<body>
+    <h1>이력서 요약 결과</h1>
+    <p><strong>요약:</strong> {{ summary }}</p>
+    <a href="/">메인 화면으로 돌아가기</a>
+</body>
+</html>
